@@ -31,20 +31,49 @@ export async function createTransaction(
   transaction.add(...instructions);
 
   transaction.feePayer = payer;
- // transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (await connection.getLatestBlockhash("finalized")).blockhash;
+
+  //transaction.recentBlockhash = (await connection.getLatestBlockhash({
+  //  "commitment":"processed"
+  //})).blockhash;
+  
   return transaction;
 }
 
-export async function sendAndConfirmTransactionWrapper(connection: Connection, transaction: Transaction, signers: any[]) {
+export async function sendAndConfirmTransactionWrapper(
+    connection: Connection,
+    transaction: Transaction,
+    signers: Keypair[]
+  ) {
     try {
-        const signature = await sendAndConfirmTransaction(connection, transaction, signers, { skipPreflight: true, preflightCommitment: 'confirmed' });
-        console.log('Transaction confirmed with signature:', signature);
-        return signature;
+      const latestBlockhash = await connection.getLatestBlockhash();
+  
+      // Send without confirmation
+      const signature = await connection.sendTransaction(transaction, signers, {
+        skipPreflight: true,  // or keep true if you really need to skip
+        preflightCommitment: 'processed',
+      });
+  
+      console.log('Transaction sent, signature:', signature);
+  
+      // Manually confirm
+      await connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        'processed'
+      );
+  
+      console.log('Transaction confirmed with signature:', signature);
+      return signature;
+  
     } catch (error) {
-        console.error('Error sending transaction:', error);
-        return null;
+      console.error('Error sending or confirming transaction:', error);
+      return null;
     }
-}
+  }
 
 export function bufferFromUInt64(value: number | string) {
     let buffer = Buffer.alloc(8);
